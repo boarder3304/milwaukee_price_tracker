@@ -56,7 +56,10 @@ def main():
 
         lowest_seen = price if prior_lowest is None else min(prior_lowest, price)
 
-        print(f"[OK] {display_name}: ${price:.2f} (target ${target_price if target_price else 'none'})")
+        formatted_price = f"${price:.2f}" if price is not None else "N/A"
+        formatted_target = f"${target_price:.2f}" if target_price else "none"
+
+        print(f"[OK] {display_name}: {formatted_price} (target {formatted_target})")
 
         update_item_price(items_ws, item["_row"], fetched_name, price, lowest_seen)
         append_history(history_ws, display_name, url, price)
