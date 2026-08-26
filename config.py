@@ -6,7 +6,7 @@ import os
 
 # Google Sheets
 GOOGLE_SERVICE_ACCOUNT_JSON = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON", "")
-SHEET_NAME = os.environ.get("SHEET_NAME", "Packout Price Tracker")
+SHEET_NAME = os.environ.get("SHEET_NAME", "Milwaukee Price Tracker")
 ITEMS_TAB = os.environ.get("ITEMS_TAB", "Items")
 HISTORY_TAB = os.environ.get("HISTORY_TAB", "History")
 
@@ -16,7 +16,7 @@ GMAIL_APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD", "")
 NOTIFY_EMAIL_TO = os.environ.get("NOTIFY_EMAIL_TO", "")
 
 # Optional: Keepa API key for Amazon price history (https://keepa.com/#!api)
-KEEPA_API_KEY = os.environ.get("KEEPA_API_KEY", "")
+#KEEPA_API_KEY = os.environ.get("KEEPA_API_KEY", "")
 
 # Request behavior
 REQUEST_TIMEOUT_SECONDS = 15
