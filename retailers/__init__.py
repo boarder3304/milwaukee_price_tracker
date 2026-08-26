@@ -15,8 +15,6 @@ from . import amazon, homedepot, milwaukeetool, acehardware, generic
 def get_fetcher(url: str):
     host = urlparse(url).netloc.lower()
 
-    if "amazon." in host:
-        return amazon.fetch
     if "homedepot.com" in host:
         return homedepot.fetch
     if "milwaukeetool.com" in host:
