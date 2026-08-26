@@ -17,6 +17,7 @@ import config
 
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/drive"
 ]
 
 ITEMS_HEADERS = ["Name", "URL", "Target Price", "Current Price", "Lowest Seen", "Last Checked", "Notes"]
