@@ -21,26 +21,32 @@ from . import generic
 
 
 def fetch(url: str) -> dict:
-    headers = {
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Sec-Ch-Ua": '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
-        "Sec-Ch-Ua-Mobile": "?0",
-        "Sec-Ch-Ua-Platform": '"Windows"',
-        "Sec-Fetch-Dest": "document",
-        "Sec-Fetch-Mode": "navigate",
-        "Sec-Fetch-Site": "none",
-        "Sec-Fetch-User": "?1",
-        "Upgrade-Insecure-Requests": "1",
-    }
+    # Extract the 9-digit Internet ID (Store SKU) from the URL
+    # Example URL: https://www.homedepot.com/p/Milwaukee-M18.../305886361
+    import re
+    match = re.search(r'/(\d{9})(?:\?|$)', url)
+    if not match:
+        # Fall back if regex misses
+        return generic.fetch(url)
+    
+    item_id = match.group(1)
+    api_url = f"https://www.homedepot.com/p/sv/products/get?itemId={item_id}"
 
     resp = requests.get(
-        url,
-        headers=headers,
-        timeout=config.REQUEST_TIMEOUT_SECONDS,
+        api_url,
+        headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"},
         impersonate="chrome120"
     )
-    resp.raise_for_status()
+    
+    if resp.status_code == 200:
+        data = resp.json()
+        product = data.get("product", {})
+        return {
+            "price": float(product.get("price", 0)),
+            "name": product.get("productTitle"),
+            "in_stock": product.get("isInstock", False),
+            "error": None
+        }
 
     if "Access Denied" in resp.text or "captcha" in resp.text.lower():
         return {
