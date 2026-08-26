@@ -1,4 +1,7 @@
+import json
+import re
 import requests
+import config
 
 def fetch(url: str) -> dict:
     # Extract item ID from Home Depot URL
