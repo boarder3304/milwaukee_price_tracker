@@ -13,7 +13,7 @@ reliable when it works), fall back to the generic meta-tag scraper.
 """
 import json
 
-import requests
+from curl_cffi import requests  # 👈 1. Import requests from curl_cffi instead
 from bs4 import BeautifulSoup
 
 import config
@@ -21,10 +21,12 @@ from . import generic
 
 
 def fetch(url: str) -> dict:
+    # 👈 2. Add impersonate="chrome120" to pass browser TLS fingerprinting
     resp = requests.get(
         url,
         headers={"User-Agent": config.USER_AGENT},
         timeout=config.REQUEST_TIMEOUT_SECONDS,
+        impersonate="chrome120"
     )
     resp.raise_for_status()
 
