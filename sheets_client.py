@@ -8,7 +8,8 @@ Expected "History" tab columns:
     Timestamp | Name | URL | Price
 """
 import json
-from datetime import datetime, timezone, zoneinfo
+from datetime import datetime, timezone
+import zoneinfo
 
 import gspread
 from google.oauth2.service_account import Credentials
