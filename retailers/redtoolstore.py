@@ -37,8 +37,11 @@ def fetch(url: str) -> dict:
     if html_result["price"] is not None:
         return html_result
 
-    # Neither worked - return whichever error is more informative
-    return result if result["error"] else html_result
+    # Neither worked - report the HTML attempt's outcome (the more recent,
+    # more informative attempt), but include the JSON error too for context.
+    combined_error = f"{html_result['error']} (JSON endpoint also failed: {result['error']})"
+    html_result["error"] = combined_error
+    return html_result
 
 
 def _try_json_endpoint(json_url: str) -> dict:
