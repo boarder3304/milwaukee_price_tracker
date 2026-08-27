@@ -1,131 +1,101 @@
 """
 Red Tool Store (redtoolstore.com) price fetcher.
 
-Red Tool Store runs on Shopify. Shopify normally exposes a free JSON
-endpoint for any product page (append ".json" to the URL), but some
-Shopify stores block that endpoint for non-browser-like requests (via
-Cloudflare or similar) while still allowing the regular HTML page through.
+Red Tool Store blocks plain automated requests at the network level (likely
+Cloudflare or similar) - both its Shopify .json endpoint and its normal HTML
+pages return 403 to non-browser requests. Header tweaks don't get around
+this, so instead of fetching the page directly, this searches Google
+Shopping via SerpApi for the product and looks for a result whose listing
+is from redtoolstore.com.
 
-Strategy: try the .json endpoint first (fast, clean data). If that's
-blocked (403) or fails, fall back to scraping the normal product page's
-embedded JSON-LD, which is present on essentially all Shopify themes.
+Trade-offs vs. a direct URL fetch:
+  - Uses one SerpApi search per item per run (counts against your quota,
+    same as the Home Depot fetcher).
+  - Not guaranteed to find every SKU - depends on whether Google Shopping
+    has indexed that specific Red Tool Store listing.
+  - The search query is guessed from the product URL's slug, since the
+    sheet only stores a URL. If matching seems off, try setting a more
+    exact "Name" in the sheet - see README.
 """
-import json
+import re
 
 import requests
-from bs4 import BeautifulSoup
 
 import config
 
-BROWSER_HEADERS = {
-    "User-Agent": config.USER_AGENT,
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-    "Accept-Language": "en-US,en;q=0.9",
-    "Referer": "https://www.redtoolstore.com/",
-}
-
 
 def fetch(url: str) -> dict:
-    clean_url = url.split("?")[0].rstrip("/")
+    if not config.SERPAPI_KEY:
+        return {"price": None, "name": None, "in_stock": None, "error": "SERPAPI_KEY is not set (check GitHub secret + workflow env)."}
 
-    result = _try_json_endpoint(clean_url + ".json")
-    if result["price"] is not None:
-        return result
+    query = _query_from_url(url)
+    if not query:
+        return {"price": None, "name": None, "in_stock": None, "error": "Could not derive a search query from this Red Tool Store URL."}
 
-    # .json failed or was blocked - fall back to scraping the HTML page directly
-    html_result = _try_html_page(clean_url)
-    if html_result["price"] is not None:
-        return html_result
+    params = {
+        "engine": "google_shopping",
+        "q": query,
+        "gl": "us",
+        "hl": "en",
+        "api_key": config.SERPAPI_KEY,
+    }
 
-    # Neither worked - report the HTML attempt's outcome (the more recent,
-    # more informative attempt), but include the JSON error too for context.
-    combined_error = f"{html_result['error']} (JSON endpoint also failed: {result['error']})"
-    html_result["error"] = combined_error
-    return html_result
-
-
-def _try_json_endpoint(json_url: str) -> dict:
     try:
-        resp = requests.get(json_url, headers=BROWSER_HEADERS, timeout=config.REQUEST_TIMEOUT_SECONDS)
+        response = requests.get("https://serpapi.com/search", params=params, timeout=config.REQUEST_TIMEOUT_SECONDS)
     except requests.RequestException as e:
-        return {"price": None, "name": None, "in_stock": None, "error": f"Request failed: {e}"}
-
-    if resp.status_code == 403:
-        return {"price": None, "name": None, "in_stock": None, "error": "JSON endpoint returned 403 (blocked) - falling back to HTML."}
-    if resp.status_code == 404:
-        return {"price": None, "name": None, "in_stock": None, "error": "Product not found (404) at .json endpoint."}
-    if resp.status_code != 200:
-        return {"price": None, "name": None, "in_stock": None, "error": f"JSON endpoint returned HTTP {resp.status_code}."}
+        return {"price": None, "name": None, "in_stock": None, "error": f"SerpApi request failed: {e}"}
 
     try:
-        data = resp.json()
+        data = response.json()
     except ValueError:
-        return {"price": None, "name": None, "in_stock": None, "error": "JSON endpoint returned non-JSON response."}
+        return {"price": None, "name": None, "in_stock": None, "error": f"SerpApi returned non-JSON response (HTTP {response.status_code})."}
 
-    product = data.get("product")
-    if not product:
-        return {"price": None, "name": None, "in_stock": None, "error": "No 'product' field in JSON response."}
+    if "error" in data:
+        return {"price": None, "name": None, "in_stock": None, "error": f"SerpApi error: {data['error']}"}
 
-    return _extract_from_shopify_product(product)
+    results = data.get("shopping_results") or []
+    match = _find_redtoolstore_result(results)
 
+    if not match:
+        return {
+            "price": None,
+            "name": None,
+            "in_stock": None,
+            "error": f"No Red Tool Store listing found in Google Shopping results for query: \"{query}\".",
+        }
 
-def _try_html_page(url: str) -> dict:
-    try:
-        resp = requests.get(url, headers=BROWSER_HEADERS, timeout=config.REQUEST_TIMEOUT_SECONDS)
-    except requests.RequestException as e:
-        return {"price": None, "name": None, "in_stock": None, "error": f"HTML page request failed: {e}"}
-
-    if resp.status_code != 200:
-        return {"price": None, "name": None, "in_stock": None, "error": f"HTML page returned HTTP {resp.status_code} - store may be blocking automated requests entirely."}
-
-    soup = BeautifulSoup(resp.text, "lxml")
-
-    for script in soup.find_all("script", type="application/ld+json"):
-        try:
-            data = json.loads(script.string or "{}")
-        except (json.JSONDecodeError, TypeError):
-            continue
-
-        candidates = data if isinstance(data, list) else [data]
-        for item in candidates:
-            if not isinstance(item, dict) or item.get("@type") != "Product":
-                continue
-
-            name = item.get("name")
-            offers = item.get("offers") or {}
-            if isinstance(offers, list):
-                offers = offers[0] if offers else {}
-
-            price = offers.get("price")
-            try:
-                price = float(price) if price is not None else None
-            except (TypeError, ValueError):
-                price = None
-
-            if price is not None:
-                availability = offers.get("availability", "")
-                in_stock = "InStock" in availability if availability else None
-                return {"price": price, "name": name, "in_stock": in_stock, "error": None}
-
-    return {"price": None, "name": None, "in_stock": None, "error": "Could not find product JSON-LD on the HTML page either - site may need a different approach."}
-
-
-def _extract_from_shopify_product(product: dict) -> dict:
-    name = product.get("title")
-    variants = product.get("variants") or []
-
-    if not variants:
-        return {"price": None, "name": name, "in_stock": None, "error": "Product has no variants listed."}
-
-    variant = next((v for v in variants if v.get("available")), variants[0])
-
-    price = variant.get("price")
-    try:
-        price = float(price) if price is not None else None
-    except (TypeError, ValueError):
-        price = None
-
+    price = _parse_price(match.get("price") or match.get("extracted_price"))
     if price is None:
-        return {"price": None, "name": name, "in_stock": None, "error": "Could not parse a price from the variant data."}
+        return {"price": None, "name": match.get("title"), "in_stock": None, "error": "Found a Red Tool Store result but couldn't parse its price."}
 
-    return {"price": price, "name": name, "in_stock": variant.get("available", False), "error": None}
+    return {"price": price, "name": match.get("title"), "in_stock": None, "error": None}
+
+
+def _query_from_url(url: str) -> str:
+    match = re.search(r"/products/([a-z0-9\-]+)", url, re.IGNORECASE)
+    if not match:
+        return ""
+    slug = match.group(1)
+    words = slug.split("-")
+    return " ".join(words)
+
+
+def _find_redtoolstore_result(results: list) -> dict | None:
+    for item in results:
+        source = (item.get("source") or "").lower()
+        link = (item.get("link") or item.get("product_link") or "").lower()
+        if "red tool store" in source or "redtoolstore.com" in link:
+            return item
+    return None
+
+
+def _parse_price(raw):
+    if raw is None:
+        return None
+    if isinstance(raw, (int, float)):
+        return float(raw)
+    cleaned = str(raw).replace("$", "").replace(",", "").strip()
+    try:
+        return float(cleaned)
+    except ValueError:
+        return None
