@@ -8,7 +8,7 @@ Expected "History" tab columns:
     Timestamp | Name | URL | Price
 """
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timezone, zoneinfo
 
 import gspread
 from google.oauth2.service_account import Credentials
@@ -70,7 +70,8 @@ def read_items(items_ws) -> list[dict]:
 
 def update_item_price(items_ws, row: int, name: str | None, price: float | None, lowest_seen):
     """Writes Current Price, Lowest Seen, Last Checked (and Name, if we learned it) back to the row."""
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    eastern = zoneinfo.ZoneInfo("America/New_York")
+    now = datetime.now(eastern).strftime("%Y-%m-%d %H:%M %Z")
 
     updates = []
     if name:
@@ -85,5 +86,6 @@ def update_item_price(items_ws, row: int, name: str | None, price: float | None,
 
 
 def append_history(history_ws, name: str, url: str, price: float):
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    eastern = zoneinfo.ZoneInfo("America/New_York")
+    now = datetime.now(eastern).strftime("%Y-%m-%d %H:%M %Z")
     history_ws.append_row([now, name, url, price])
