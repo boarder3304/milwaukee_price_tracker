@@ -9,7 +9,7 @@ CSS selector needs updating - check the "error" field for a hint.
 """
 from urllib.parse import urlparse
 
-from . import homedepot, milwaukeetool, acehardware, generic
+from . import homedepot, milwaukeetool, redtoolstore acehardware, generic
 
 
 def get_fetcher(url: str):
@@ -17,6 +17,8 @@ def get_fetcher(url: str):
 
     if "homedepot.com" in host:
         return homedepot.fetch
+    if "redtoolstore.com" in host:
+        return redtoolstore.fetch
     if "milwaukeetool.com" in host:
         return milwaukeetool.fetch
     if "acehardware.com" in host:
