@@ -20,6 +20,12 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      - name: Debug SERPAPI_KEY
+        env:
+          SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
+        run: |
+          python -c "import os; v = os.environ.get('SERPAPI_KEY'); print('SERPAPI_KEY present:', bool(v)); print('length:', len(v) if v else 0)"
+
       - name: Run price check
         env:
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
