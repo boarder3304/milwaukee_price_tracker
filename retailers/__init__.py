@@ -9,7 +9,7 @@ CSS selector needs updating - check the "error" field for a hint.
 """
 from urllib.parse import urlparse
 
-from . import homedepot, milwaukeetool, redtoolstore, acehardware, generic
+from . import amazon, homedepot, milwaukeetool, acehardware, generic, redtoolstore, googleshopping
 
 
 def get_fetcher(url: str):
@@ -26,7 +26,7 @@ def get_fetcher(url: str):
 
     # Fallback: generic scraper that guesses at common price patterns.
     # Works sometimes, not reliable - flagged in the result.
-    return generic.fetch
+    return googleshopping.fetch
 
 
 def fetch_price(url: str) -> dict:
