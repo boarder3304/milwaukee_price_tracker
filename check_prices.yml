@@ -23,7 +23,7 @@ jobs:
       - name: Debug SERPAPI_KEY
         env:
           SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
-        run: |
+        run:
           python -c "import os; v = os.environ.get('SERPAPI_KEY'); print('SERPAPI_KEY present:', bool(v)); print('length:', len(v) if v else 0)"
 
       - name: Run price check
